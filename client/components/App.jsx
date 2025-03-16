@@ -12,7 +12,7 @@ export default function App() {
   const audioElement = useRef(null);
 
   async function startSession() {
-    // Get an ephemeral key from the Fastify server
+    // Get a session token for OpenAI Realtime API
     const tokenResponse = await fetch("/token");
     const data = await tokenResponse.json();
     const EPHEMERAL_KEY = data.client_secret.value;
@@ -83,8 +83,16 @@ export default function App() {
   // Send a message to the model
   function sendClientEvent(message) {
     if (dataChannel) {
+      const timestamp = new Date().toLocaleTimeString();
       message.event_id = message.event_id || crypto.randomUUID();
+
+      // send event before setting timestamp since the backend peer doesn't expect this field
       dataChannel.send(JSON.stringify(message));
+
+      // if guard just in case the timestamp exists by miracle
+      if (!message.timestamp) {
+        message.timestamp = timestamp;
+      }
       setEvents((prev) => [message, ...prev]);
     } else {
       console.error(
@@ -119,7 +127,12 @@ export default function App() {
     if (dataChannel) {
       // Append new server events to the list
       dataChannel.addEventListener("message", (e) => {
-        setEvents((prev) => [JSON.parse(e.data), ...prev]);
+        const event = JSON.parse(e.data);
+        if (!event.timestamp) {
+          event.timestamp = new Date().toLocaleTimeString();
+        }
+
+        setEvents((prev) => [event, ...prev]);
       });
 
       // Set session active when the data channel is opened
